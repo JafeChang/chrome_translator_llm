@@ -2,6 +2,7 @@ const providerEl = document.getElementById('provider');
 const apiKeyEl = document.getElementById('apiKey');
 const baseUrlEl = document.getElementById('baseUrl');
 const modelEl = document.getElementById('model');
+const modelOptionsEl = document.getElementById('modelOptions');
 const temperatureEl = document.getElementById('temperature');
 const defaultTargetLangEl = document.getElementById('defaultTargetLanguage');
 const selectionEnabledEl = document.getElementById('selectionEnabled');
@@ -16,12 +17,22 @@ const statusEl = document.getElementById('status');
 const PROVIDER_PRESETS = {
   openai: {
     baseUrl: 'https://api.openai.com',
+    model: 'gpt-3.5-turbo',
+    models: ['gpt-4o-mini', 'gpt-3.5-turbo'],
   },
   siliconflow: {
     baseUrl: 'https://api.siliconflow.cn',
+    model: 'Qwen/Qwen2.5-7B-Instruct',
+    models: [
+      'Qwen/Qwen2.5-7B-Instruct',
+      'Qwen/Qwen2.5-14B-Instruct',
+      'Qwen/Qwen2-7B-Instruct',
+    ],
   },
   local: {
     baseUrl: 'http://localhost:1234',
+    model: '',
+    models: [],
   },
 };
 
@@ -37,8 +48,16 @@ const DEFAULT_SETTINGS = {
 
 let currentSettings = { ...DEFAULT_SETTINGS };
 
+function getProviderPreset(providerType) {
+  return PROVIDER_PRESETS[providerType] || PROVIDER_PRESETS.openai;
+}
+
 function getProviderBaseUrl(providerType) {
-  return PROVIDER_PRESETS[providerType]?.baseUrl || DEFAULT_SETTINGS.baseUrl;
+  return getProviderPreset(providerType).baseUrl || DEFAULT_SETTINGS.baseUrl;
+}
+
+function getProviderModel(providerType) {
+  return getProviderPreset(providerType).model || DEFAULT_SETTINGS.model;
 }
 
 function loadSettings() {
@@ -47,11 +66,12 @@ function loadSettings() {
     providerEl.value = currentSettings.providerType;
     apiKeyEl.value = currentSettings.apiKey;
     baseUrlEl.value = currentSettings.baseUrl || getProviderBaseUrl(currentSettings.providerType);
-    modelEl.value = currentSettings.model;
+    modelEl.value = currentSettings.model || getProviderModel(currentSettings.providerType);
     temperatureEl.value = currentSettings.temperature;
     defaultTargetLangEl.value = currentSettings.targetLanguage;
     selectionEnabledEl.checked = Boolean(currentSettings.selectionEnabled);
 
+    updateModelOptions(currentSettings.providerType, !currentSettings.model);
     updateHints(!currentSettings.baseUrl);
 
     if (!targetLangEl.value) {
@@ -71,13 +91,42 @@ function updateHints(forceFill = false) {
   }
 }
 
+function updateModelOptions(providerType, forceFill = false) {
+  const preset = getProviderPreset(providerType);
+
+  if (modelOptionsEl) {
+    modelOptionsEl.innerHTML = '';
+    (preset.models || []).forEach((model) => {
+      const option = document.createElement('option');
+      option.value = model;
+      modelOptionsEl.appendChild(option);
+    });
+  }
+
+  const currentValue = modelEl.value.trim();
+  const presetModel = preset.model || DEFAULT_SETTINGS.model;
+  const openaiDefault = getProviderModel('openai');
+
+  if (!currentValue) {
+    modelEl.value = presetModel;
+  } else if (forceFill && providerType === 'siliconflow' && currentValue === openaiDefault) {
+    modelEl.value = presetModel;
+  } else if (
+    forceFill &&
+    providerType === 'openai' &&
+    currentValue === getProviderModel('siliconflow')
+  ) {
+    modelEl.value = presetModel;
+  }
+}
+
 function saveSettings() {
   const providerType = providerEl.value;
   const settings = {
     providerType,
     apiKey: apiKeyEl.value.trim(),
     baseUrl: baseUrlEl.value.trim() || getProviderBaseUrl(providerType),
-    model: modelEl.value.trim() || DEFAULT_SETTINGS.model,
+    model: modelEl.value.trim() || getProviderModel(providerType),
     temperature: Number(temperatureEl.value) || DEFAULT_SETTINGS.temperature,
     targetLanguage: defaultTargetLangEl.value.trim() || DEFAULT_SETTINGS.targetLanguage,
     selectionEnabled: Boolean(selectionEnabledEl.checked),
@@ -119,7 +168,7 @@ function translate() {
 
 function translateActivePage() {
   const targetLanguage = targetLangEl.value.trim() || currentSettings.targetLanguage || '中文';
-  statusEl.textContent = '正在翻译当前页面...';
+  statusEl.innerHTML = '正在翻译当前页面<span class="status-ellipsis" aria-hidden="true"></span>';
   translatePageBtn.disabled = true;
 
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -157,7 +206,10 @@ function translateActivePage() {
   });
 }
 
-providerEl.addEventListener('change', () => updateHints(true));
+providerEl.addEventListener('change', () => {
+  updateHints(true);
+  updateModelOptions(providerEl.value, true);
+});
 saveBtn.addEventListener('click', saveSettings);
 translateBtn.addEventListener('click', translate);
 translatePageBtn.addEventListener('click', translateActivePage);

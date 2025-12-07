@@ -2,6 +2,7 @@ const FLOATING_CLASS = 'llm-immersive-btn';
 const PANEL_CLASS = 'llm-immersive-panel';
 const TRANSLATED_FONT_CLASS = 'llm-page-translation';
 const BATCH_SIZE = 5;
+const LOADING_ELLIPSIS_CLASS = 'llm-translation-ellipsis';
 
 const DEFAULT_SETTINGS = {
   targetLanguage: '中文',
@@ -13,6 +14,7 @@ let buttonEl;
 let panelEl;
 let hideTimer;
 const translatedNodes = new WeakSet();
+const loadingIndicators = new WeakMap();
 const translationCache = new Map();
 
 function applyStyles() {
@@ -52,6 +54,9 @@ function applyStyles() {
     }
     .${PANEL_CLASS} .llm-immersive-status { color: #cbd5e1; font-size: 13px; }
     .${PANEL_CLASS} .llm-immersive-error { color: #fca5a5; font-size: 13px; }
+    .${LOADING_ELLIPSIS_CLASS} { display: inline-block; width: 16px; overflow: hidden; vertical-align: baseline; }
+    .${LOADING_ELLIPSIS_CLASS}::after { display: inline-block; content: '...'; animation: llm-ellipsis steps(4, end) 1s infinite; }
+    @keyframes llm-ellipsis { 0% { width: 0; } 100% { width: 16px; } }
   `;
   document.head.appendChild(style);
 }
@@ -201,6 +206,24 @@ function shouldTranslateTextNode(node) {
   return true;
 }
 
+function attachLoadingIndicator(node) {
+  if (loadingIndicators.has(node)) return;
+  if (!node?.parentNode) return;
+  const indicator = document.createElement('span');
+  indicator.className = LOADING_ELLIPSIS_CLASS;
+  indicator.setAttribute('aria-hidden', 'true');
+  node.parentNode.insertBefore(indicator, node.nextSibling);
+  loadingIndicators.set(node, indicator);
+}
+
+function removeLoadingIndicator(node) {
+  const indicator = loadingIndicators.get(node);
+  if (indicator?.parentNode) {
+    indicator.parentNode.removeChild(indicator);
+  }
+  loadingIndicators.delete(node);
+}
+
 function appendTranslationFont(node, translatedText, targetLanguage) {
   const fontEl = document.createElement('font');
   fontEl.className = TRANSLATED_FONT_CLASS;
@@ -231,44 +254,52 @@ async function translateFullPage(targetLanguage) {
     }
   }
 
+  textNodes.forEach(attachLoadingIndicator);
+
   let translatedCount = 0;
   const translationsByText = new Map();
 
-  for (const text of textNodeMap.keys()) {
-    if (translationCache.has(text)) {
-      translationsByText.set(text, translationCache.get(text));
+  try {
+    for (const text of textNodeMap.keys()) {
+      if (translationCache.has(text)) {
+        translationsByText.set(text, translationCache.get(text));
+      }
     }
-  }
 
-  const missingTexts = [...textNodeMap.keys()].filter(
-    (text) => !translationsByText.has(text)
-  );
+    const missingTexts = [...textNodeMap.keys()].filter(
+      (text) => !translationsByText.has(text)
+    );
 
-  for (let i = 0; i < missingTexts.length; i += BATCH_SIZE) {
-    const batch = missingTexts.slice(i, i + BATCH_SIZE);
-    try {
-      const translations = await sendBatchTranslationRequest(batch, lang);
-      batch.forEach((text, index) => {
-        const translated = translations?.[index] || '';
-        translationCache.set(text, translated);
-        translationsByText.set(text, translated);
+    for (let i = 0; i < missingTexts.length; i += BATCH_SIZE) {
+      const batch = missingTexts.slice(i, i + BATCH_SIZE);
+      try {
+        const translations = await sendBatchTranslationRequest(batch, lang);
+        batch.forEach((text, index) => {
+          const translated = translations?.[index] || '';
+          translationCache.set(text, translated);
+          translationsByText.set(text, translated);
+        });
+      } catch (error) {
+        console.error('Batch translate failed', error);
+      }
+    }
+
+    for (const [text, nodes] of textNodeMap.entries()) {
+      const translation = translationsByText.get(text);
+      nodes.forEach((node) => {
+        if (translation) {
+          appendTranslationFont(node, translation, lang);
+          translatedNodes.add(node);
+          translatedCount += 1;
+        }
+        removeLoadingIndicator(node);
       });
-    } catch (error) {
-      console.error('Batch translate failed', error);
     }
-  }
 
-  for (const [text, nodes] of textNodeMap.entries()) {
-    const translation = translationsByText.get(text);
-    if (!translation) continue;
-    nodes.forEach((node) => {
-      appendTranslationFont(node, translation, lang);
-      translatedNodes.add(node);
-      translatedCount += 1;
-    });
+    return { translatedCount, total: textNodes.length };
+  } finally {
+    textNodes.forEach(removeLoadingIndicator);
   }
-
-  return { translatedCount, total: textNodes.length };
 }
 
 function handleSelection() {

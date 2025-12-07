@@ -95,6 +95,28 @@ button.secondary:hover {
   color: #475569;
 }
 
+.status-ellipsis {
+  display: inline-block;
+  width: 16px;
+  overflow: hidden;
+  vertical-align: baseline;
+}
+
+.status-ellipsis::after {
+  display: inline-block;
+  content: '...';
+  animation: ellipsis steps(4, end) 1s infinite;
+}
+
+@keyframes ellipsis {
+  0% {
+    width: 0;
+  }
+  100% {
+    width: 16px;
+  }
+}
+
 .hint {
   color: #475569;
   font-size: 12px;
