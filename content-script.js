@@ -54,9 +54,11 @@ function applyStyles() {
     }
     .${PANEL_CLASS} .llm-immersive-status { color: #cbd5e1; font-size: 13px; }
     .${PANEL_CLASS} .llm-immersive-error { color: #fca5a5; font-size: 13px; }
-    .${LOADING_ELLIPSIS_CLASS} { display: inline-block; width: 16px; overflow: hidden; vertical-align: baseline; }
-    .${LOADING_ELLIPSIS_CLASS}::after { display: inline-block; content: '...'; animation: llm-ellipsis steps(4, end) 1s infinite; }
-    @keyframes llm-ellipsis { 0% { width: 0; } 100% { width: 16px; } }
+    .${LOADING_ELLIPSIS_CLASS} { display: inline-flex; align-items: center; gap: 3px; width: 24px; height: 6px; vertical-align: baseline; }
+    .${LOADING_ELLIPSIS_CLASS} .dot { width: 6px; height: 6px; border-radius: 999px; background: #cbd5e1; animation: llm-dot-pulse 1.2s infinite ease-in-out; }
+    .${LOADING_ELLIPSIS_CLASS} .dot:nth-child(2) { animation-delay: 0.15s; }
+    .${LOADING_ELLIPSIS_CLASS} .dot:nth-child(3) { animation-delay: 0.3s; }
+    @keyframes llm-dot-pulse { 0%, 80%, 100% { transform: scale(0.8); opacity: 0.65; } 40% { transform: scale(1); opacity: 1; } }
   `;
   document.head.appendChild(style);
 }
@@ -145,7 +147,9 @@ function translateSelection() {
   const selection = window.getSelection();
   const text = (selection?.toString() || '').trim();
   if (!text) return;
-  updatePanel('<span class="llm-immersive-status">翻译中…</span>');
+  updatePanel(
+    `<span class="llm-immersive-status">翻译中<span class="${LOADING_ELLIPSIS_CLASS}" aria-hidden="true"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></span>`
+  );
 
   chrome.runtime.sendMessage(
     { type: 'translate', text, targetLanguage: cachedSettings.targetLanguage },
@@ -212,6 +216,7 @@ function attachLoadingIndicator(node) {
   const indicator = document.createElement('span');
   indicator.className = LOADING_ELLIPSIS_CLASS;
   indicator.setAttribute('aria-hidden', 'true');
+  indicator.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
   node.parentNode.insertBefore(indicator, node.nextSibling);
   loadingIndicators.set(node, indicator);
 }
