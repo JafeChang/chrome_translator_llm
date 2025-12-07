@@ -1,6 +1,7 @@
 const FLOATING_CLASS = 'llm-immersive-btn';
 const PANEL_CLASS = 'llm-immersive-panel';
 const TRANSLATED_FONT_CLASS = 'llm-page-translation';
+const BATCH_SIZE = 5;
 
 const DEFAULT_SETTINGS = {
   targetLanguage: '中文',
@@ -12,6 +13,7 @@ let buttonEl;
 let panelEl;
 let hideTimer;
 const translatedNodes = new WeakSet();
+const translationCache = new Map();
 
 function applyStyles() {
   if (document.getElementById('llm-immersive-style')) return;
@@ -169,6 +171,21 @@ function sendTranslationRequest(text, targetLanguage) {
   });
 }
 
+function sendBatchTranslationRequest(texts, targetLanguage) {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(
+      { type: 'translateBatch', texts, targetLanguage },
+      (response) => {
+        if (response?.error) {
+          reject(new Error(response.error));
+          return;
+        }
+        resolve(Array.isArray(response?.translations) ? response.translations : []);
+      }
+    );
+  });
+}
+
 function shouldTranslateTextNode(node) {
   if (translatedNodes.has(node)) return false;
   if (!node?.parentElement) return false;
@@ -202,27 +219,53 @@ async function translateFullPage(targetLanguage) {
   );
 
   const textNodes = [];
+  const textNodeMap = new Map();
   while (walker.nextNode()) {
     const current = walker.currentNode;
     if (shouldTranslateTextNode(current)) {
+      const text = current.textContent.trim();
       textNodes.push(current);
+      const nodes = textNodeMap.get(text) || [];
+      nodes.push(current);
+      textNodeMap.set(text, nodes);
     }
   }
 
   let translatedCount = 0;
-  for (const node of textNodes) {
+  const translationsByText = new Map();
+
+  for (const text of textNodeMap.keys()) {
+    if (translationCache.has(text)) {
+      translationsByText.set(text, translationCache.get(text));
+    }
+  }
+
+  const missingTexts = [...textNodeMap.keys()].filter(
+    (text) => !translationsByText.has(text)
+  );
+
+  for (let i = 0; i < missingTexts.length; i += BATCH_SIZE) {
+    const batch = missingTexts.slice(i, i + BATCH_SIZE);
     try {
-      const translation = await sendTranslationRequest(
-        node.textContent.trim(),
-        lang
-      );
-      if (!translation) continue;
+      const translations = await sendBatchTranslationRequest(batch, lang);
+      batch.forEach((text, index) => {
+        const translated = translations?.[index] || '';
+        translationCache.set(text, translated);
+        translationsByText.set(text, translated);
+      });
+    } catch (error) {
+      console.error('Batch translate failed', error);
+    }
+  }
+
+  for (const [text, nodes] of textNodeMap.entries()) {
+    const translation = translationsByText.get(text);
+    if (!translation) continue;
+    nodes.forEach((node) => {
       appendTranslationFont(node, translation, lang);
       translatedNodes.add(node);
       translatedCount += 1;
-    } catch (error) {
-      console.error('Translate node failed', error);
-    }
+    });
   }
 
   return { translatedCount, total: textNodes.length };
