@@ -1,0 +1,101 @@
+const providerEl = document.getElementById('provider');
+const apiKeyEl = document.getElementById('apiKey');
+const baseUrlEl = document.getElementById('baseUrl');
+const modelEl = document.getElementById('model');
+const temperatureEl = document.getElementById('temperature');
+const defaultTargetLangEl = document.getElementById('defaultTargetLanguage');
+const selectionEnabledEl = document.getElementById('selectionEnabled');
+const saveBtn = document.getElementById('saveSettings');
+const translateBtn = document.getElementById('translate');
+const sourceTextEl = document.getElementById('sourceText');
+const targetLangEl = document.getElementById('targetLanguage');
+const resultEl = document.getElementById('result');
+const statusEl = document.getElementById('status');
+
+const DEFAULT_SETTINGS = {
+  providerType: 'openai',
+  apiKey: '',
+  baseUrl: 'https://api.openai.com',
+  model: 'gpt-3.5-turbo',
+  temperature: 0.2,
+  targetLanguage: '中文',
+  selectionEnabled: true,
+};
+
+let currentSettings = { ...DEFAULT_SETTINGS };
+
+function loadSettings() {
+  chrome.storage.sync.get(DEFAULT_SETTINGS, (settings) => {
+    currentSettings = { ...DEFAULT_SETTINGS, ...settings };
+    providerEl.value = currentSettings.providerType;
+    apiKeyEl.value = currentSettings.apiKey;
+    baseUrlEl.value = currentSettings.baseUrl;
+    modelEl.value = currentSettings.model;
+    temperatureEl.value = currentSettings.temperature;
+    defaultTargetLangEl.value = currentSettings.targetLanguage;
+    selectionEnabledEl.checked = Boolean(currentSettings.selectionEnabled);
+
+    if (!targetLangEl.value) {
+      targetLangEl.value = currentSettings.targetLanguage;
+    } else {
+      targetLangEl.placeholder = currentSettings.targetLanguage;
+    }
+  });
+}
+
+function updateHints() {
+  if (providerEl.value === 'local' && !baseUrlEl.value) {
+    baseUrlEl.value = 'http://localhost:11434';
+  }
+}
+
+function saveSettings() {
+  const settings = {
+    providerType: providerEl.value,
+    apiKey: apiKeyEl.value.trim(),
+    baseUrl: baseUrlEl.value.trim() || DEFAULT_SETTINGS.baseUrl,
+    model: modelEl.value.trim() || DEFAULT_SETTINGS.model,
+    temperature: Number(temperatureEl.value) || DEFAULT_SETTINGS.temperature,
+    targetLanguage: defaultTargetLangEl.value.trim() || DEFAULT_SETTINGS.targetLanguage,
+    selectionEnabled: Boolean(selectionEnabledEl.checked),
+  };
+
+  currentSettings = settings;
+
+  chrome.runtime.sendMessage({ type: 'saveSettings', settings }, (res) => {
+    statusEl.textContent = res?.ok ? '配置已保存' : '保存失败';
+    setTimeout(() => (statusEl.textContent = ''), 1500);
+  });
+}
+
+function translate() {
+  const text = sourceTextEl.value.trim();
+  if (!text) {
+    statusEl.textContent = '请输入待翻译文本';
+    return;
+  }
+
+  const targetLanguage = targetLangEl.value.trim() || currentSettings.targetLanguage || '中文';
+  statusEl.textContent = '翻译中...';
+  translateBtn.disabled = true;
+
+  chrome.runtime.sendMessage(
+    { type: 'translate', text, targetLanguage },
+    (response) => {
+      translateBtn.disabled = false;
+      if (response?.error) {
+        statusEl.textContent = `错误：${response.error}`;
+        resultEl.value = '';
+      } else {
+        statusEl.textContent = '翻译完成';
+        resultEl.value = response.translation || '';
+      }
+    }
+  );
+}
+
+providerEl.addEventListener('change', updateHints);
+saveBtn.addEventListener('click', saveSettings);
+translateBtn.addEventListener('click', translate);
+
+document.addEventListener('DOMContentLoaded', loadSettings);
