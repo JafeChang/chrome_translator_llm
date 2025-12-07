@@ -1,0 +1,13 @@
+{
+  "name": "chrome_translator_llm",
+  "version": "1.0.0",
+  "description": "这是一个 Chrome 插件开发模板，可以快速连接 OpenAI 兼容或本地 LLM 进行翻译。",
+  "main": "content-script.js",
+  "scripts": {
+    "test": "node --test"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "type": "commonjs"
+}
