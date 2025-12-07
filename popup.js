@@ -13,10 +13,22 @@ const targetLangEl = document.getElementById('targetLanguage');
 const resultEl = document.getElementById('result');
 const statusEl = document.getElementById('status');
 
+const PROVIDER_PRESETS = {
+  openai: {
+    baseUrl: 'https://api.openai.com',
+  },
+  siliconflow: {
+    baseUrl: 'https://api.siliconflow.cn',
+  },
+  local: {
+    baseUrl: 'http://localhost:1234',
+  },
+};
+
 const DEFAULT_SETTINGS = {
   providerType: 'openai',
   apiKey: '',
-  baseUrl: 'https://api.openai.com',
+  baseUrl: PROVIDER_PRESETS.openai.baseUrl,
   model: 'gpt-3.5-turbo',
   temperature: 0.2,
   targetLanguage: '中文',
@@ -25,16 +37,22 @@ const DEFAULT_SETTINGS = {
 
 let currentSettings = { ...DEFAULT_SETTINGS };
 
+function getProviderBaseUrl(providerType) {
+  return PROVIDER_PRESETS[providerType]?.baseUrl || DEFAULT_SETTINGS.baseUrl;
+}
+
 function loadSettings() {
   chrome.storage.sync.get(DEFAULT_SETTINGS, (settings) => {
     currentSettings = { ...DEFAULT_SETTINGS, ...settings };
     providerEl.value = currentSettings.providerType;
     apiKeyEl.value = currentSettings.apiKey;
-    baseUrlEl.value = currentSettings.baseUrl;
+    baseUrlEl.value = currentSettings.baseUrl || getProviderBaseUrl(currentSettings.providerType);
     modelEl.value = currentSettings.model;
     temperatureEl.value = currentSettings.temperature;
     defaultTargetLangEl.value = currentSettings.targetLanguage;
     selectionEnabledEl.checked = Boolean(currentSettings.selectionEnabled);
+
+    updateHints(!currentSettings.baseUrl);
 
     if (!targetLangEl.value) {
       targetLangEl.value = currentSettings.targetLanguage;
@@ -44,17 +62,21 @@ function loadSettings() {
   });
 }
 
-function updateHints() {
-  if (providerEl.value === 'local' && !baseUrlEl.value) {
-    baseUrlEl.value = 'http://localhost:11434';
+function updateHints(forceFill = false) {
+  const presetBase = getProviderBaseUrl(providerEl.value);
+  baseUrlEl.placeholder = presetBase;
+
+  if (!baseUrlEl.value || forceFill) {
+    baseUrlEl.value = presetBase;
   }
 }
 
 function saveSettings() {
+  const providerType = providerEl.value;
   const settings = {
-    providerType: providerEl.value,
+    providerType,
     apiKey: apiKeyEl.value.trim(),
-    baseUrl: baseUrlEl.value.trim() || DEFAULT_SETTINGS.baseUrl,
+    baseUrl: baseUrlEl.value.trim() || getProviderBaseUrl(providerType),
     model: modelEl.value.trim() || DEFAULT_SETTINGS.model,
     temperature: Number(temperatureEl.value) || DEFAULT_SETTINGS.temperature,
     targetLanguage: defaultTargetLangEl.value.trim() || DEFAULT_SETTINGS.targetLanguage,
@@ -135,7 +157,7 @@ function translateActivePage() {
   });
 }
 
-providerEl.addEventListener('change', updateHints);
+providerEl.addEventListener('change', () => updateHints(true));
 saveBtn.addEventListener('click', saveSettings);
 translateBtn.addEventListener('click', translate);
 translatePageBtn.addEventListener('click', translateActivePage);
