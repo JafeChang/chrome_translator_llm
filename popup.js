@@ -119,7 +119,7 @@ function translate() {
 
 function translateActivePage() {
   const targetLanguage = targetLangEl.value.trim() || currentSettings.targetLanguage || '中文';
-  statusEl.textContent = '正在翻译当前页面...';
+  statusEl.innerHTML = '正在翻译当前页面<span class="status-ellipsis" aria-hidden="true"></span>';
   translatePageBtn.disabled = true;
 
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
