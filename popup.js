@@ -140,6 +140,10 @@ function saveSettings() {
   });
 }
 
+function showLoadingStatus(text) {
+  statusEl.innerHTML = `<span class="status-text">${text}</span><span class="status-loader" aria-hidden="true"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span>`;
+}
+
 function translate() {
   const text = sourceTextEl.value.trim();
   if (!text) {
@@ -148,7 +152,7 @@ function translate() {
   }
 
   const targetLanguage = targetLangEl.value.trim() || currentSettings.targetLanguage || '中文';
-  statusEl.textContent = '翻译中...';
+  showLoadingStatus('翻译中');
   translateBtn.disabled = true;
 
   chrome.runtime.sendMessage(
@@ -159,8 +163,9 @@ function translate() {
         statusEl.textContent = `错误：${response.error}`;
         resultEl.value = '';
       } else {
-        statusEl.textContent = '翻译完成';
-        resultEl.value = response.translation || '';
+        const translation = response.translation || '';
+        statusEl.textContent = translation || '翻译完成';
+        resultEl.value = translation;
       }
     }
   );
@@ -168,7 +173,7 @@ function translate() {
 
 function translateActivePage() {
   const targetLanguage = targetLangEl.value.trim() || currentSettings.targetLanguage || '中文';
-  statusEl.innerHTML = '正在翻译当前页面<span class="status-ellipsis" aria-hidden="true"></span>';
+  showLoadingStatus('正在翻译当前页面');
   translatePageBtn.disabled = true;
 
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -197,7 +202,7 @@ function translateActivePage() {
 
         if (response) {
           const { translatedCount, total } = response;
-          statusEl.textContent = `页面翻译完成：${translatedCount}/${total} 段文本`; 
+          statusEl.textContent = `页面翻译完成：${translatedCount}/${total} 段文本`;
         } else {
           statusEl.textContent = '已发送页面翻译指令';
         }

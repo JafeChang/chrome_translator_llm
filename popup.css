@@ -95,25 +95,38 @@ button.secondary:hover {
   color: #475569;
 }
 
-.status-ellipsis {
-  display: inline-block;
-  width: 16px;
-  overflow: hidden;
-  vertical-align: baseline;
+.status-loader {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
-.status-ellipsis::after {
-  display: inline-block;
-  content: '...';
-  animation: ellipsis steps(4, end) 1s infinite;
+.status-loader .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #0b5ea6;
+  animation: loaderPulse 1.2s infinite ease-in-out;
 }
 
-@keyframes ellipsis {
-  0% {
-    width: 0;
-  }
+.status-loader .dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.status-loader .dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes loaderPulse {
+  0%,
+  80%,
   100% {
-    width: 16px;
+    transform: scale(0.8);
+    opacity: 0.6;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
   }
 }
 
