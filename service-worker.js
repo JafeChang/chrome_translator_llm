@@ -96,6 +96,11 @@ async function setCachedTranslation(key, value) {
   await persistCache();
 }
 
+function resetCacheForTests() {
+  translationCache = new Map();
+  cacheReady = Promise.resolve();
+}
+
 async function callLLM(prompt, targetLanguage, settings) {
   const activeSettings = settings || (await getSettings());
   const url = `${activeSettings.baseUrl.replace(/\/$/, '')}/v1/chat/completions`;
@@ -282,3 +287,22 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
 
   return false;
 });
+
+if (typeof module !== 'undefined') {
+  module.exports = {
+    DEFAULT_SETTINGS,
+    makeCacheKey,
+    translateWithCache,
+    translateBatchWithCache,
+    callLLM,
+    callLLMBatch,
+    getCachedTranslation,
+    setCachedTranslation,
+    serializeCache,
+    loadCache,
+    persistCache,
+    trimCache,
+    getSettings,
+    resetCacheForTests,
+  };
+}
