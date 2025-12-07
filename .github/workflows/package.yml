@@ -1,0 +1,29 @@
+name: Build extension package
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build package
+        run: |
+          chmod +x scripts/pack.sh
+          bash scripts/pack.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: llm-translator-extension
+          path: dist/llm-translator-extension.zip
+          if-no-files-found: error
