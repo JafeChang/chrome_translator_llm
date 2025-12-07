@@ -13,6 +13,11 @@ const CACHE_MAX_ENTRIES = 300;
 let translationCache = new Map();
 let cacheReady = null;
 
+const PROVIDER_DEFAULT_MODELS = {
+  siliconflow: 'Qwen/Qwen2.5-7B-Instruct',
+  openai: DEFAULT_SETTINGS.model,
+};
+
 function getSettings() {
   return new Promise((resolve) => {
     chrome.storage.sync.get(DEFAULT_SETTINGS, (result) => {
@@ -61,10 +66,17 @@ async function loadCache() {
   }
 }
 
+function resolveModel(settings) {
+  if (!settings) return DEFAULT_SETTINGS.model;
+  const providerModel = PROVIDER_DEFAULT_MODELS[settings.providerType];
+  return settings.model || providerModel || DEFAULT_SETTINGS.model;
+}
+
 function makeCacheKey(text, targetLanguage, settings) {
+  const model = resolveModel(settings);
   return [
     settings.providerType || 'provider',
-    settings.model || 'model',
+    model || 'model',
     settings.baseUrl || 'base',
     targetLanguage,
     text,
@@ -104,6 +116,7 @@ function resetCacheForTests() {
 async function callLLM(prompt, targetLanguage, settings) {
   const activeSettings = settings || (await getSettings());
   const url = `${activeSettings.baseUrl.replace(/\/$/, '')}/v1/chat/completions`;
+  const model = resolveModel(activeSettings);
 
   const headers = {
     'Content-Type': 'application/json',
@@ -114,7 +127,7 @@ async function callLLM(prompt, targetLanguage, settings) {
   }
 
   const body = {
-    model: activeSettings.model,
+    model,
     temperature: Number(activeSettings.temperature) || 0,
     messages: [
       {
@@ -147,6 +160,7 @@ async function callLLM(prompt, targetLanguage, settings) {
 async function callLLMBatch(texts, targetLanguage, settings) {
   const activeSettings = settings || (await getSettings());
   const url = `${activeSettings.baseUrl.replace(/\/$/, '')}/v1/chat/completions`;
+  const model = resolveModel(activeSettings);
 
   const headers = {
     'Content-Type': 'application/json',
@@ -161,7 +175,7 @@ async function callLLMBatch(texts, targetLanguage, settings) {
     .join('\n');
 
   const body = {
-    model: activeSettings.model,
+    model,
     temperature: Number(activeSettings.temperature) || 0,
     messages: [
       {
