@@ -1,0 +1,2 @@
+# chrome_translator_llm
+这是一个Chrome插件开发库，用于快速连接自定义的LLM进行翻译
