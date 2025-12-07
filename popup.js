@@ -7,6 +7,7 @@ const defaultTargetLangEl = document.getElementById('defaultTargetLanguage');
 const selectionEnabledEl = document.getElementById('selectionEnabled');
 const saveBtn = document.getElementById('saveSettings');
 const translateBtn = document.getElementById('translate');
+const translatePageBtn = document.getElementById('translatePage');
 const sourceTextEl = document.getElementById('sourceText');
 const targetLangEl = document.getElementById('targetLanguage');
 const resultEl = document.getElementById('result');
@@ -94,8 +95,49 @@ function translate() {
   );
 }
 
+function translateActivePage() {
+  const targetLanguage = targetLangEl.value.trim() || currentSettings.targetLanguage || '中文';
+  statusEl.textContent = '正在翻译当前页面...';
+  translatePageBtn.disabled = true;
+
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    const tabId = tabs?.[0]?.id;
+    if (!tabId) {
+      statusEl.textContent = '无法找到当前标签页';
+      translatePageBtn.disabled = false;
+      return;
+    }
+
+    chrome.tabs.sendMessage(
+      tabId,
+      { type: 'translatePage', targetLanguage },
+      (response) => {
+        translatePageBtn.disabled = false;
+
+        if (chrome.runtime.lastError) {
+          statusEl.textContent = `错误：${chrome.runtime.lastError.message}`;
+          return;
+        }
+
+        if (response?.error) {
+          statusEl.textContent = `错误：${response.error}`;
+          return;
+        }
+
+        if (response) {
+          const { translatedCount, total } = response;
+          statusEl.textContent = `页面翻译完成：${translatedCount}/${total} 段文本`; 
+        } else {
+          statusEl.textContent = '已发送页面翻译指令';
+        }
+      }
+    );
+  });
+}
+
 providerEl.addEventListener('change', updateHints);
 saveBtn.addEventListener('click', saveSettings);
 translateBtn.addEventListener('click', translate);
+translatePageBtn.addEventListener('click', translateActivePage);
 
 document.addEventListener('DOMContentLoaded', loadSettings);

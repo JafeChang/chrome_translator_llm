@@ -1,5 +1,6 @@
 const FLOATING_CLASS = 'llm-immersive-btn';
 const PANEL_CLASS = 'llm-immersive-panel';
+const TRANSLATED_FONT_CLASS = 'llm-page-translation';
 
 const DEFAULT_SETTINGS = {
   targetLanguage: '中文',
@@ -10,6 +11,7 @@ let cachedSettings = { ...DEFAULT_SETTINGS };
 let buttonEl;
 let panelEl;
 let hideTimer;
+const translatedNodes = new WeakSet();
 
 function applyStyles() {
   if (document.getElementById('llm-immersive-style')) return;
@@ -152,6 +154,80 @@ function translateSelection() {
   );
 }
 
+function sendTranslationRequest(text, targetLanguage) {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(
+      { type: 'translate', text, targetLanguage },
+      (response) => {
+        if (response?.error) {
+          reject(new Error(response.error));
+          return;
+        }
+        resolve(response?.translation || '');
+      }
+    );
+  });
+}
+
+function shouldTranslateTextNode(node) {
+  if (translatedNodes.has(node)) return false;
+  if (!node?.parentElement) return false;
+  const text = (node.textContent || '').trim();
+  if (!text) return false;
+  const parent = node.parentElement;
+  if (
+    parent.closest('script,style,noscript,textarea,code,pre,select,option,input')
+  ) {
+    return false;
+  }
+  if (parent.classList.contains(TRANSLATED_FONT_CLASS)) return false;
+  return true;
+}
+
+function appendTranslationFont(node, translatedText, targetLanguage) {
+  const fontEl = document.createElement('font');
+  fontEl.className = TRANSLATED_FONT_CLASS;
+  fontEl.setAttribute('lang', targetLanguage);
+  fontEl.textContent = translatedText;
+  node.parentNode.insertBefore(fontEl, node.nextSibling);
+}
+
+async function translateFullPage(targetLanguage) {
+  const lang = targetLanguage || cachedSettings.targetLanguage;
+  const walker = document.createTreeWalker(
+    document.body,
+    NodeFilter.SHOW_TEXT,
+    null,
+    false
+  );
+
+  const textNodes = [];
+  while (walker.nextNode()) {
+    const current = walker.currentNode;
+    if (shouldTranslateTextNode(current)) {
+      textNodes.push(current);
+    }
+  }
+
+  let translatedCount = 0;
+  for (const node of textNodes) {
+    try {
+      const translation = await sendTranslationRequest(
+        node.textContent.trim(),
+        lang
+      );
+      if (!translation) continue;
+      appendTranslationFont(node, translation, lang);
+      translatedNodes.add(node);
+      translatedCount += 1;
+    } catch (error) {
+      console.error('Translate node failed', error);
+    }
+  }
+
+  return { translatedCount, total: textNodes.length };
+}
+
 function handleSelection() {
   showButton();
 }
@@ -162,6 +238,15 @@ function init() {
   document.addEventListener('mouseup', handleSelection);
   document.addEventListener('keyup', handleSelection);
   document.addEventListener('scroll', hideUI, { passive: true });
+  chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
+    if (request?.type === 'translatePage') {
+      translateFullPage(request.targetLanguage)
+        .then((result) => sendResponse(result))
+        .catch((error) => sendResponse({ error: error.message }));
+      return true;
+    }
+    return undefined;
+  });
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'sync') return;
     if (changes.targetLanguage) {

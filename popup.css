@@ -80,6 +80,14 @@ button:hover {
   background: #0a4b85;
 }
 
+button.secondary {
+  background: #0f172a;
+}
+
+button.secondary:hover {
+  background: #0c1327;
+}
+
 #status {
   margin: 6px 0;
   min-height: 18px;
